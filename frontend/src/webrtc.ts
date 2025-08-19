@@ -95,6 +95,14 @@ export async function setupPeer(room: string, role: Role, videoEl: HTMLVideoElem
       }
       if (!stream) { throw lastError || new Error('Unable to access camera'); }
       console.log('Got media stream, tracks:', stream.getTracks().length);
+      // Show local preview for sender
+      try {
+        videoEl.srcObject = stream;
+        // Ensure autoplay works
+        // @ts-ignore
+        if (typeof videoEl.muted === 'boolean') videoEl.muted = true;
+        await videoEl.play().catch(()=>{});
+      } catch {}
       stream.getTracks().forEach(t => {
         console.log('Adding track:', t.kind);
         pc.addTrack(t, stream);
