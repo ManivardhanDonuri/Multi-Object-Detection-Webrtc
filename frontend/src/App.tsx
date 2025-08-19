@@ -13,6 +13,8 @@ export const App: React.FC = () => {
   const [role, setRole] = useState<Role>(() => (isMobile() ? 'sender' : 'viewer'));
   const [mode, setMode] = useState<'wasm'|'server'>(defaultMode);
   const [facing, setFacing] = useState<Facing>('environment');
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [deviceId, setDeviceId] = useState<string | undefined>(undefined);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -35,7 +37,7 @@ export const App: React.FC = () => {
       const video = videoRef.current!;
       const overlay = overlayRef.current!;
       overlay.width = 640; overlay.height = 480;
-      const { data } = await setupPeer(room, role, video, facing);
+      const { data } = await setupPeer(room, role, video, facing, deviceId);
       dataRef.current = data;
       if (role === 'sender' && data) {
         // Send frame meta periodically
@@ -53,7 +55,19 @@ export const App: React.FC = () => {
       }
       if (role === 'viewer') startRenderLoop();
     })();
-  }, [role, room, facing, started]);
+  }, [role, room, facing, deviceId, started]);
+
+  useEffect(() => {
+    if (!started || role !== 'sender') return;
+    (async () => {
+      try {
+        if (navigator.mediaDevices?.enumerateDevices) {
+          const list = await navigator.mediaDevices.enumerateDevices();
+          setDevices(list.filter(d => d.kind === 'videoinput'));
+        }
+      } catch {}
+    })();
+  }, [started, role]);
 
   async function startRenderLoop() {
     const video = videoRef.current!;
@@ -143,6 +157,16 @@ export const App: React.FC = () => {
               <select value={facing} onChange={(e)=>setFacing(e.target.value as Facing)}>
                 <option value="environment">back</option>
                 <option value="user">front</option>
+              </select>
+            </div>
+          )}
+          {role === 'sender' && devices.length > 0 && (
+            <div>Device: 
+              <select value={deviceId} onChange={(e)=>setDeviceId(e.target.value || undefined)}>
+                <option value="">auto</option>
+                {devices.map(d => (
+                  <option key={d.deviceId} value={d.deviceId}>{d.label || `Camera ${d.deviceId.slice(0,6)}`}</option>
+                ))}
               </select>
             </div>
           )}

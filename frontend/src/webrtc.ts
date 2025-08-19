@@ -3,7 +3,25 @@ import { connectSignaling } from './signaling';
 export type Role = 'sender' | 'viewer';
 export type Facing = 'environment' | 'user';
 
-export async function setupPeer(room: string, role: Role, videoEl: HTMLVideoElement, facing: Facing = 'environment'): Promise<{pc: RTCPeerConnection, data?: RTCDataChannel, ws: WebSocket}> {
+function getUserMediaFn(): (c: MediaStreamConstraints) => Promise<MediaStream> {
+  const md = navigator.mediaDevices as any;
+  if (md && typeof md.getUserMedia === 'function') {
+    return (c: MediaStreamConstraints) => md.getUserMedia.call(md, c);
+  }
+  const legacy = (navigator as any).getUserMedia || (navigator as any).webkitGetUserMedia || (navigator as any).mozGetUserMedia || (navigator as any).msGetUserMedia;
+  if (legacy) {
+    return (c: MediaStreamConstraints) => new Promise<MediaStream>((resolve, reject) => legacy.call(navigator, c, resolve, reject));
+  }
+  return (_c: MediaStreamConstraints) => Promise.reject(new Error('getUserMedia not supported'));
+}
+
+export async function setupPeer(
+  room: string,
+  role: Role,
+  videoEl: HTMLVideoElement,
+  facing: Facing = 'environment',
+  deviceId?: string,
+): Promise<{pc: RTCPeerConnection, data?: RTCDataChannel, ws: WebSocket}> {
   const ws = connectSignaling(room);
   const pc = new RTCPeerConnection({
     iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }],
@@ -63,24 +81,11 @@ export async function setupPeer(room: string, role: Role, videoEl: HTMLVideoElem
   if (role === 'sender') {
     console.log('Getting user media for sender');
     try {
-      // Try different getUserMedia methods for compatibility
-      let getUserMedia = navigator.getUserMedia || 
-                        navigator.webkitGetUserMedia || 
-                        navigator.mozGetUserMedia ||
-                        navigator.msGetUserMedia;
-      
-      if (!getUserMedia && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        getUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-      }
-      
-      if (!getUserMedia) {
-        console.error('getUserMedia not supported');
-        alert('Camera access not supported. Please use a modern browser with camera support.');
-        return { pc, data, ws };
-      }
+      const getUserMedia = getUserMediaFn();
       
       // Prefer back camera on mobile; provide multiple fallbacks to improve chances
       const constraintsList: MediaStreamConstraints[] = [
+        ...(deviceId ? [{ video: { deviceId: { exact: deviceId }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } }, audio: false } as MediaStreamConstraints] : []),
         { video: { facingMode: { ideal: facing }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } }, audio: false },
         { video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } }, audio: false },
         { video: true, audio: false },
