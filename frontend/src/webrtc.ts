@@ -31,6 +31,14 @@ export async function setupPeer(
     iceServers.push({ urls: [turnUrl], username: turnUsername, credential: turnCredential });
   }
   const pc = new RTCPeerConnection({ iceServers });
+
+  pc.oniceconnectionstatechange = () => {
+    console.log('ICE state:', pc.iceConnectionState);
+  };
+
+  pc.onconnectionstatechange = () => {
+    console.log('PeerConnection state:', pc.connectionState);
+  };
   
   console.log('Setting up peer for role:', role);
   
