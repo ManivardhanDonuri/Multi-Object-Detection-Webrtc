@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp">
+    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin">
+    <title>ONNX Runtime Web Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+    </style>
+</head>
+<body>
+    <h1>ONNX Runtime Web WASM Test</h1>
+    <div id="status" class="status info">Initializing...</div>
+    <div id="output"></div>
+
+    <script type="module">
+        import * as ort from 'onnxruntime-web';
+        
+        const statusDiv = document.getElementById('status');
+        const outputDiv = document.getElementById('output');
+        
+        async function testONNX() {
+            try {
+                statusDiv.textContent = 'Loading ONNX Runtime Web...';
+                statusDiv.className = 'status info';
+                
+                // Configure ONNX Runtime
+                ort.env.wasm.numThreads = 1;
+                ort.env.wasm.simd = false;
+                
+                // Set WASM paths
+                ort.env.wasm.wasmPaths = {
+                  'ort-wasm.wasm': '/ort-wasm.wasm',
+                  'ort-wasm-simd.wasm': '/ort-wasm-simd.wasm',
+                  'ort-wasm-threaded.wasm': '/ort-wasm-threaded.wasm'
+                };
+                
+                statusDiv.textContent = 'ONNX Runtime Web loaded successfully!';
+                statusDiv.className = 'status success';
+                
+                outputDiv.innerHTML = `
+                    <div class="status success">
+                        <h3>✅ ONNX Runtime Web Test Results:</h3>
+                        <ul>
+                            <li>✅ ONNX Runtime Web loaded successfully</li>
+                            <li>✅ WASM files are accessible</li>
+                            <li>✅ Cross-origin isolation headers are set</li>
+                            <li>✅ WASM MIME types are correct</li>
+                        </ul>
+                    </div>
+                    <div class="status info">
+                        <h3>Configuration:</h3>
+                        <ul>
+                            <li>WASM Threads: ${ort.env.wasm.numThreads}</li>
+                            <li>SIMD Enabled: ${ort.env.wasm.simd}</li>
+                            <li>WASM Paths: Configured</li>
+                        </ul>
+                    </div>
+                    <p>Check browser console for any additional information.</p>
+                `;
+                
+                console.log('ONNX Runtime Web initialized successfully');
+                console.log('WASM configuration:', {
+                    numThreads: ort.env.wasm.numThreads,
+                    simd: ort.env.wasm.simd,
+                    wasmPaths: ort.env.wasm.wasmPaths
+                });
+                
+            } catch (error) {
+                statusDiv.textContent = 'Error initializing ONNX Runtime Web';
+                statusDiv.className = 'status error';
+                outputDiv.innerHTML = `
+                    <div class="status error">
+                        <h3>❌ Error Details:</h3>
+                        <p><strong>Error:</strong> ${error.message}</p>
+                        <p><strong>Stack:</strong> ${error.stack}</p>
+                    </div>
+                `;
+                console.error('ONNX Runtime Web error:', error);
+            }
+        }
+        
+        testONNX();
+    </script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ONNX Runtime Web Test</title>
+</head>
+<body>
+    <h1>ONNX Runtime Web WASM Test</h1>
+    <div id="status">Loading...</div>
+    <div id="output"></div>
+
+    <script type="module">
+        import * as ort from 'onnxruntime-web';
+        
+        const statusDiv = document.getElementById('status');
+        const outputDiv = document.getElementById('output');
+        
+        async function testONNX() {
+            try {
+                statusDiv.textContent = 'Initializing ONNX Runtime...';
+                
+                // Configure ONNX Runtime
+                ort.env.wasm.numThreads = 1;
+                ort.env.wasm.simd = false;
+                
+                statusDiv.textContent = 'ONNX Runtime initialized successfully!';
+                outputDiv.innerHTML = `
+                    <p>✅ ONNX Runtime Web loaded successfully</p>
+                    <p>WASM files should be available</p>
+                    <p>Check browser console for any warnings</p>
+                `;
+                
+            } catch (error) {
+                statusDiv.textContent = 'Error initializing ONNX Runtime';
+                outputDiv.innerHTML = `<p>❌ Error: ${error.message}</p>`;
+                console.error('ONNX Runtime error:', error);
+            }
+        }
+        
+        testONNX();
+    </script>
+</body>
+</html>

@@ -5,8 +5,9 @@ import time
 from typing import Dict, Any, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from aiortc import RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaBlackhole
@@ -27,6 +28,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add CORS headers for cross-origin isolation
+@app.middleware("http")
+async def add_cors_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    return response
 
 
 class SimpleDetector:
@@ -81,8 +90,8 @@ detector = SimpleDetector()
 latest_result: Optional[Dict[str, Any]] = None
 
 
-@app.get("/")
-async def root():
+@app.get("/health")
+async def health():
     return {"status": "ok", "mode": MODE}
 
 
@@ -122,6 +131,7 @@ async def offer(sdp: Dict[str, Any]):
     pc = RTCPeerConnection()
     media_blackhole = MediaBlackhole()
     result_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue(maxsize=1)
+    results_channel = pc.createDataChannel("results")
 
     @pc.on("track")
     def on_track(track):
@@ -152,6 +162,13 @@ async def offer(sdp: Dict[str, Any]):
                 await result_queue.put(message)
                 global latest_result
                 latest_result = message
+                # Try pushing over DataChannel if open
+                try:
+                    if results_channel and results_channel.readyState == "open":
+                        # Send as text JSON
+                        results_channel.send(json.dumps(message))
+                except Exception:
+                    pass
                 # Avoid overwhelming CPU
                 elapsed = time.time() - t0
                 await asyncio.sleep(max(0.0, 1.0 / 15.0 - elapsed))
@@ -258,3 +275,64 @@ async def metrics_summary(duration: int = 30):
         "kbps_uplink": kbps_uplink,
         "kbps_downlink": kbps_downlink,
     }
+
+
+# Serve frontend build (SPA) if present
+def _resolve_frontend_dist() -> Optional[str]:
+    # Prefer Docker image path if present
+    docker_path = "/app/frontend_dist"
+    if os.path.isdir(docker_path):
+        return docker_path
+    # Fallback to repository path for local dev
+    repo_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))
+    if os.path.isdir(repo_path):
+        return repo_path
+    env_path = os.getenv("FRONTEND_DIST", "")
+    if env_path and os.path.isdir(env_path):
+        return env_path
+    return None
+
+
+_DIST_ROOT = _resolve_frontend_dist()
+if _DIST_ROOT:
+    assets_dir = os.path.join(_DIST_ROOT, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    # Serve WASM files with correct MIME type
+    @app.get("/ort-wasm.wasm")
+    async def serve_wasm():
+        wasm_path = os.path.join(_DIST_ROOT, "ort-wasm.wasm")
+        if os.path.exists(wasm_path):
+            with open(wasm_path, "rb") as f:
+                return Response(content=f.read(), media_type="application/wasm")
+        return Response(status_code=404)
+
+    @app.get("/ort-wasm-simd.wasm")
+    async def serve_wasm_simd():
+        wasm_path = os.path.join(_DIST_ROOT, "ort-wasm-simd.wasm")
+        if os.path.exists(wasm_path):
+            with open(wasm_path, "rb") as f:
+                return Response(content=f.read(), media_type="application/wasm")
+        return Response(status_code=404)
+
+    @app.get("/ort-wasm-threaded.wasm")
+    async def serve_wasm_threaded():
+        wasm_path = os.path.join(_DIST_ROOT, "ort-wasm-threaded.wasm")
+        if os.path.exists(wasm_path):
+            with open(wasm_path, "rb") as f:
+                return Response(content=f.read(), media_type="application/wasm")
+        return Response(status_code=404)
+
+    _INDEX_HTML = os.path.join(_DIST_ROOT, "index.html")
+
+    @app.get("/", include_in_schema=False)
+    async def serve_index():
+        return FileResponse(_INDEX_HTML)
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str):
+        file_path = os.path.join(_DIST_ROOT, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(_INDEX_HTML)

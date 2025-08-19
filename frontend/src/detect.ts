@@ -1,6 +1,17 @@
 import * as ort from 'onnxruntime-web';
 import { Detection } from './overlay';
 
+// Configure ONNX Runtime Web
+ort.env.wasm.numThreads = 1; // Reduce threads to avoid cross-origin issues
+ort.env.wasm.simd = false; // Disable SIMD for better compatibility
+
+// Set the path to WASM files
+ort.env.wasm.wasmPaths = {
+  'ort-wasm.wasm': '/ort-wasm.wasm',
+  'ort-wasm-simd.wasm': '/ort-wasm-simd.wasm',
+  'ort-wasm-threaded.wasm': '/ort-wasm-threaded.wasm'
+};
+
 // WASM: simple heuristic fallback if model not loaded to keep CPU modest
 export class WasmDetector {
   private session: ort.InferenceSession | null = null;
@@ -9,8 +20,15 @@ export class WasmDetector {
   async init(modelUrl?: string) {
     try {
       if (modelUrl) {
-        this.session = await ort.InferenceSession.create(modelUrl, { executionProviders: ['wasm'] });
+        // Configure execution providers - use CPU as fallback if WASM fails
+        const executionProviders = ['wasm', 'cpu'];
+        
+        this.session = await ort.InferenceSession.create(modelUrl, { 
+          executionProviders,
+          graphOptimizationLevel: 'all'
+        });
         this.inputName = this.session.inputNames[0];
+        console.log('ONNX Runtime session created successfully');
       }
     } catch (e) {
       console.warn('WASM model load failed, using heuristic fallback', e);
