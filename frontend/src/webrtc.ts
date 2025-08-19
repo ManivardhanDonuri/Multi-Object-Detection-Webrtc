@@ -1,8 +1,9 @@
 import { connectSignaling } from './signaling';
 
 export type Role = 'sender' | 'viewer';
+export type Facing = 'environment' | 'user';
 
-export async function setupPeer(room: string, role: Role, videoEl: HTMLVideoElement): Promise<{pc: RTCPeerConnection, data?: RTCDataChannel, ws: WebSocket}> {
+export async function setupPeer(room: string, role: Role, videoEl: HTMLVideoElement, facing: Facing = 'environment'): Promise<{pc: RTCPeerConnection, data?: RTCDataChannel, ws: WebSocket}> {
   const ws = connectSignaling(room);
   const pc = new RTCPeerConnection({
     iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }],
@@ -80,7 +81,7 @@ export async function setupPeer(room: string, role: Role, videoEl: HTMLVideoElem
       
       // Prefer back camera on mobile; provide multiple fallbacks to improve chances
       const constraintsList: MediaStreamConstraints[] = [
-        { video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } }, audio: false },
+        { video: { facingMode: { ideal: facing }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } }, audio: false },
         { video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } }, audio: false },
         { video: true, audio: false },
       ];

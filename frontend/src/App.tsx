@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { Role, setupPeer } from './webrtc';
+import { Role, setupPeer, Facing } from './webrtc';
 import { shortId, isMobile, nowMs, dataURLFromCanvas, bytesFromDataURL, sleep, isInAppBrowser } from './utils';
 import { drawDetections, Detection } from './overlay';
 import { WasmDetector, inferServer } from './detect';
@@ -12,6 +12,7 @@ export const App: React.FC = () => {
   const [room] = useState(() => new URLSearchParams(location.search).get('room') || shortId());
   const [role, setRole] = useState<Role>(() => (isMobile() ? 'sender' : 'viewer'));
   const [mode, setMode] = useState<'wasm'|'server'>(defaultMode);
+  const [facing, setFacing] = useState<Facing>('environment');
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -34,7 +35,7 @@ export const App: React.FC = () => {
       const video = videoRef.current!;
       const overlay = overlayRef.current!;
       overlay.width = 640; overlay.height = 480;
-      const { data } = await setupPeer(room, role, video);
+      const { data } = await setupPeer(room, role, video, facing);
       dataRef.current = data;
       if (role === 'sender' && data) {
         // Send frame meta periodically
@@ -52,7 +53,7 @@ export const App: React.FC = () => {
       }
       if (role === 'viewer') startRenderLoop();
     })();
-  }, [role, room, started]);
+  }, [role, room, facing, started]);
 
   async function startRenderLoop() {
     const video = videoRef.current!;
@@ -137,6 +138,14 @@ export const App: React.FC = () => {
               <option value="server">server (HTTP infer)</option>
             </select>
           </div>
+          {role === 'sender' && (
+            <div>Camera: 
+              <select value={facing} onChange={(e)=>setFacing(e.target.value as Facing)}>
+                <option value="environment">back</option>
+                <option value="user">front</option>
+              </select>
+            </div>
+          )}
           {role === 'viewer' && qrDataUrl && (
             <div>
               <div>Scan on phone to join:</div>
