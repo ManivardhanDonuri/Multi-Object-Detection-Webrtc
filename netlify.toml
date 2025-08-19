@@ -10,6 +10,12 @@
   to = "/index.html"
   status = 200
 
+# Explicitly allow camera on this origin
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Permissions-Policy = "camera=(self)"
+
 # Optional: if you host the Python backend separately and want to use a relative 
 # path like /api from the frontend, uncomment and set your backend URL.
 # [[redirects]]

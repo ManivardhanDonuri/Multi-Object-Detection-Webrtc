@@ -21,3 +21,18 @@ export function bytesFromDataURL(dataUrl: string): number {
   const b64 = dataUrl.slice(i + 1);
   return Math.ceil(b64.length * 3 / 4);
 }
+
+export function isInAppBrowser(): boolean {
+  const ua = navigator.userAgent || navigator.vendor || (window as any).opera || '';
+  // Common in-app browsers that restrict camera/web APIs
+  const patterns = [
+    /FBAN|FBAV|Facebook/i,     // Facebook
+    /Instagram/i,              // Instagram
+    /Line/i,                   // LINE
+    /Snapchat/i,               // Snapchat
+    /Twitter/i,                // Twitter/X
+    /WhatsApp/i,               // WhatsApp
+    /WeChat|MicroMessenger/i,  // WeChat
+  ];
+  return patterns.some((p) => p.test(ua));
+}

@@ -78,14 +78,22 @@ export async function setupPeer(room: string, role: Role, videoEl: HTMLVideoElem
         return { pc, data, ws };
       }
       
-      const stream = await getUserMedia({ 
-        video: { 
-          width: { ideal: 320 }, 
-          height: { ideal: 240 }, 
-          frameRate: { ideal: 15 } 
-        }, 
-        audio: false 
-      });
+      // Prefer back camera on mobile; provide multiple fallbacks to improve chances
+      const constraintsList: MediaStreamConstraints[] = [
+        { video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } }, audio: false },
+        { video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } }, audio: false },
+        { video: true, audio: false },
+      ];
+      let stream: MediaStream | null = null;
+      let lastError: any = null;
+      for (const c of constraintsList) {
+        try {
+          // @ts-ignore legacy signatures handled above
+          stream = await getUserMedia(c);
+          if (stream) break;
+        } catch (e) { lastError = e; }
+      }
+      if (!stream) { throw lastError || new Error('Unable to access camera'); }
       console.log('Got media stream, tracks:', stream.getTracks().length);
       stream.getTracks().forEach(t => {
         console.log('Adding track:', t.kind);
@@ -97,9 +105,10 @@ export async function setupPeer(room: string, role: Role, videoEl: HTMLVideoElem
         console.log('Sending offer');
         ws.send(JSON.stringify({ type: 'offer', sdp: offer.sdp }));
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting user media:', error);
-      alert('Camera access denied. Please allow camera permissions or try a different browser.');
+      const reason = (error && error.name) ? error.name : 'Unknown error';
+      alert(`Camera access failed (${reason}). Please grant camera permission in browser settings or open this link in Chrome/Safari instead of an in-app browser.`);
     }
   }
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { Role, setupPeer } from './webrtc';
-import { shortId, isMobile, nowMs, dataURLFromCanvas, bytesFromDataURL, sleep } from './utils';
+import { shortId, isMobile, nowMs, dataURLFromCanvas, bytesFromDataURL, sleep, isInAppBrowser } from './utils';
 import { drawDetections, Detection } from './overlay';
 import { WasmDetector, inferServer } from './detect';
 
@@ -19,6 +19,7 @@ export const App: React.FC = () => {
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const wasm = useMemo(() => new WasmDetector(), []);
   const [stats, setStats] = useState<{fps:number, e2e:number}>({fps:0,e2e:0});
+  const [started, setStarted] = useState<boolean>(false);
 
   useEffect(() => {
     const baseUrl = location.origin;
@@ -27,6 +28,7 @@ export const App: React.FC = () => {
   }, [room]);
 
   useEffect(() => {
+    if (!started) return;
     (async () => {
       await wasm.init();
       const video = videoRef.current!;
@@ -50,7 +52,7 @@ export const App: React.FC = () => {
       }
       if (role === 'viewer') startRenderLoop();
     })();
-  }, [role, room]);
+  }, [role, room, started]);
 
   async function startRenderLoop() {
     const video = videoRef.current!;
@@ -119,6 +121,16 @@ export const App: React.FC = () => {
               <option value="sender">sender (phone)</option>
             </select>
           </div>
+          {!started && (
+            <div style={{marginTop:8}}>
+              {isInAppBrowser() && (
+                <div style={{ color: '#b45309', background: '#fffbeb', border: '1px solid #f59e0b', padding: 8, borderRadius: 6, marginBottom: 8 }}>
+                  Detected an in-app browser. Camera may not work. Please open this link in your system browser (Chrome/Safari).
+                </div>
+              )}
+              <button onClick={() => setStarted(true)}>Start</button>
+            </div>
+          )}
           <div>Mode: 
             <select value={mode} onChange={(e)=>setMode(e.target.value as any)}>
               <option value="wasm">wasm (on-device)</option>
