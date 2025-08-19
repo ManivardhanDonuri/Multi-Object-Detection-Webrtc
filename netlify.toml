@@ -1,7 +1,7 @@
 [build]
   # Build the Vite app inside the frontend directory
   base = "frontend"
-  command = "npm ci && npm run build"
+  command = "npm install && npm run build"
   publish = "dist"
 
 # SPA fallback: serve index.html for all routes
