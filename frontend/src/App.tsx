@@ -117,7 +117,7 @@ export const App: React.FC = () => {
         <div>
           <div>Room: <code>{room}</code></div>
           <div>Role: 
-            <select value={role} onChange={(e)=>setRole(e.target.value as Role)}>
+            <select name="role" value={role} onChange={(e)=>setRole(e.target.value as Role)}>
               <option value="viewer">viewer (desktop)</option>
               <option value="sender">sender (phone)</option>
             </select>
@@ -133,7 +133,7 @@ export const App: React.FC = () => {
             </div>
           )}
           <div>Mode: 
-            <select value={mode} onChange={(e)=>setMode(e.target.value as any)}>
+            <select name="mode" value={mode} onChange={(e)=>setMode(e.target.value as any)}>
               <option value="wasm">wasm (on-device)</option>
               <option value="server">server (HTTP infer)</option>
             </select>
