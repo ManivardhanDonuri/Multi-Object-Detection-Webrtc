@@ -23,16 +23,26 @@ export async function setupPeer(
   deviceId?: string,
 ): Promise<{pc: RTCPeerConnection, data?: RTCDataChannel, ws: WebSocket}> {
   const ws = connectSignaling(room);
-  const pc = new RTCPeerConnection({
-    iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }],
-  });
+  const iceServers: RTCIceServer[] = [{ urls: ['stun:stun.l.google.com:19302'] }];
+  const turnUrl = (import.meta as any).env?.VITE_TURN_URL;
+  const turnUsername = (import.meta as any).env?.VITE_TURN_USERNAME;
+  const turnCredential = (import.meta as any).env?.VITE_TURN_CREDENTIAL;
+  if (turnUrl) {
+    iceServers.push({ urls: [turnUrl], username: turnUsername, credential: turnCredential });
+  }
+  const pc = new RTCPeerConnection({ iceServers });
   
   console.log('Setting up peer for role:', role);
   
   pc.onicecandidate = (e) => {
     if (e.candidate) {
       console.log('Sending ICE candidate');
-      ws.send(JSON.stringify({ type: 'candidate', candidate: e.candidate }));
+      const payload = JSON.stringify({ type: 'candidate', candidate: e.candidate });
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(payload);
+      } else {
+        ws.addEventListener('open', () => ws.send(payload), { once: true });
+      }
     }
   };
 
@@ -115,10 +125,15 @@ export async function setupPeer(
       });
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      ws.onopen = () => {
+      const sendOffer = () => {
         console.log('Sending offer');
         ws.send(JSON.stringify({ type: 'offer', sdp: offer.sdp }));
       };
+      if (ws.readyState === WebSocket.OPEN) {
+        sendOffer();
+      } else {
+        ws.addEventListener('open', sendOffer, { once: true });
+      }
     } catch (error: any) {
       console.error('Error getting user media:', error);
       const reason = (error && error.name) ? error.name : 'Unknown error';
