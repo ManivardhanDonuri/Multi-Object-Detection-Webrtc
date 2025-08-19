@@ -1,10 +1,12 @@
 export type Signal = { type: string; sdp?: string; candidate?: any };
 
+import { getBackendOrigin } from './utils';
+
 export function connectSignaling(room: string): WebSocket {
-  // Use the same host as the frontend but connect to backend port for WebSocket
-  const backendUrl = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:8000';
+  const backendUrl = getBackendOrigin();
   const url = new URL(backendUrl);
-  url.protocol = url.protocol.replace('http', 'ws');
+  // Honor HTTPS → WSS
+  url.protocol = (url.protocol === 'https:') ? 'wss:' : 'ws:';
   url.pathname = '/ws';
   url.searchParams.set('room', room);
   console.log('Connecting to WebSocket:', url.toString());

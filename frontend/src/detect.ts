@@ -54,7 +54,8 @@ export class WasmDetector {
 }
 
 export async function inferServer(dataUrl: string, frameId: string | number, captureTs: number): Promise<{frame_id: any, capture_ts: number, recv_ts: number, inference_ts: number, detections: Detection[]}> {
-  const backend = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:8000';
+  const { getBackendOrigin } = await import('./utils');
+  const backend = getBackendOrigin();
   const res = await fetch(`${backend}/infer`, {
     method: 'POST',
     body: toFormData(dataUrl, frameId, captureTs),

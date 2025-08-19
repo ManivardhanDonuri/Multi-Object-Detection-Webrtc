@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { Role, setupPeer, Facing } from './webrtc';
-import { shortId, isMobile, nowMs, dataURLFromCanvas, bytesFromDataURL, sleep, isInAppBrowser } from './utils';
+import { shortId, isMobile, nowMs, dataURLFromCanvas, bytesFromDataURL, sleep, isInAppBrowser, getBackendOrigin } from './utils';
 import { drawDetections, Detection } from './overlay';
 import { WasmDetector, inferServer } from './detect';
 
@@ -115,6 +115,7 @@ export const App: React.FC = () => {
       <h2>WebRTC VLM Multi-Object Detection</h2>
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         <div>
+          <div>Backend: <code>{getBackendOrigin()}</code></div>
           <div>Room: <code>{room}</code></div>
           <div>Role: 
             <select name="role" value={role} onChange={(e)=>setRole(e.target.value as Role)}>

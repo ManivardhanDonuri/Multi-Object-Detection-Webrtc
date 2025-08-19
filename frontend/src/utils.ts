@@ -36,3 +36,24 @@ export function isInAppBrowser(): boolean {
   ];
   return patterns.some((p) => p.test(ua));
 }
+
+export function getBackendOrigin(): string {
+  try {
+    const url = new URL(window.location.href);
+    const q = url.searchParams.get('backend');
+    if (q) {
+      localStorage.setItem('backend_url', q);
+      return q;
+    }
+    const stored = localStorage.getItem('backend_url');
+    if (stored) return stored;
+  } catch {}
+  const envVal = (import.meta as any).env?.VITE_BACKEND_URL as string | undefined;
+  if (envVal) return envVal;
+  // Local dev default
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    return 'http://localhost:8000';
+  }
+  // As a last resort, fall back to same origin (only works if backend is reverse-proxied)
+  return `${location.protocol}//${location.host}`;
+}
