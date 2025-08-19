@@ -21,7 +21,7 @@ export const App: React.FC = () => {
   const [stats, setStats] = useState<{fps:number, e2e:number}>({fps:0,e2e:0});
 
   useEffect(() => {
-    const baseUrl = (import.meta as any).env?.VITE_BACKEND_URL?.replace(':8000', ':5173') || location.origin;
+    const baseUrl = location.origin;
     const url = `${baseUrl}/?room=${room}`;
     QRCode.toDataURL(url, { margin: 1, width: 200 }).then(setQrDataUrl);
   }, [room]);
