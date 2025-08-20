@@ -10,10 +10,12 @@ const defaultMode = (import.meta.env.VITE_DEFAULT_MODE || 'wasm') as 'wasm' | 's
 
 interface Stats {
   fps: number;
-  e2e: number;
+  e2e: number; // end-to-end latency ms
   detections: number;
   confidence: number;
-  uptime: number;
+  uptime: number; // seconds
+  upKbps: number; // uplink kbps
+  downKbps: number; // downlink kbps
 }
 
 interface DetectionStats {
@@ -35,10 +37,12 @@ export const App: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const dataRef = useRef<RTCDataChannel | undefined>();
+  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const wasm = useMemo(() => new WasmDetector(), []);
-  const [stats, setStats] = useState<Stats>({ fps: 0, e2e: 0, detections: 0, confidence: 0, uptime: 0 });
+  const [stats, setStats] = useState<Stats>({ fps: 0, e2e: 0, detections: 0, confidence: 0, uptime: 0, upKbps: 0, downKbps: 0 });
   const [detectionStats, setDetectionStats] = useState<DetectionStats>({ total: 0, byLabel: {}, averageConfidence: 0 });
   const [recentDetections, setRecentDetections] = useState<Detection[]>([]);
   const [showStats, setShowStats] = useState(true);
@@ -69,8 +73,21 @@ export const App: React.FC = () => {
         overlay.width = 640; overlay.height = 480;
         
         setConnectionStatus('connecting');
-        const { data } = await setupPeer(room, role, video, facing);
+        const { pc, data, ws } = await setupPeer(room, role, video, facing);
+        pcRef.current = pc;
+        wsRef.current = ws;
         dataRef.current = data;
+
+        // Reflect connection state dynamically
+        const updateConn = () => {
+          const state = pc.connectionState;
+          if (state === 'connected') setConnectionStatus('connected');
+          else if (state === 'connecting') setConnectionStatus('connecting');
+          else setConnectionStatus('disconnected');
+        };
+        updateConn();
+        pc.onconnectionstatechange = updateConn;
+        pc.oniceconnectionstatechange = updateConn;
         
         if (role === 'sender' && data) {
           // Send frame meta periodically
@@ -91,7 +108,6 @@ export const App: React.FC = () => {
           startRenderLoop();
         }
         
-        setConnectionStatus('connected');
         setIsConnecting(false);
       } catch (err) {
         setError(`Connection failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -101,6 +117,54 @@ export const App: React.FC = () => {
       }
     })();
   }, [role, room, facing, isStarted]);
+
+  // Auto-detect facing mode for sender based on actual track settings
+  useEffect(() => {
+    if (!isStarted || role !== 'sender') return;
+    const id = window.setInterval(() => {
+      const stream = videoRef.current?.srcObject as MediaStream | null | undefined;
+      const facingMode = stream?.getVideoTracks?.()[0]?.getSettings?.().facingMode as string | undefined;
+      if (facingMode) {
+        const fm = facingMode.includes('environment') ? 'environment' : (facingMode.includes('user') ? 'user' : undefined);
+        if (fm && fm !== facing) setFacing(fm);
+      }
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, [isStarted, role, facing]);
+
+  // Poll WebRTC getStats for bandwidth
+  useEffect(() => {
+    if (!isStarted || !pcRef.current) return;
+    let prevTs = 0;
+    let prevBytesSent = 0;
+    let prevBytesRecv = 0;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const report = await pcRef.current!.getStats();
+        let bytesSent = 0, bytesRecv = 0, ts = 0;
+        report.forEach((s: any) => {
+          if ((s.type === 'outbound-rtp' || s.type === 'inbound-rtp') && s.kind === 'video') {
+            if (s.type === 'outbound-rtp' && typeof s.bytesSent === 'number') bytesSent += s.bytesSent;
+            if (s.type === 'inbound-rtp' && typeof s.bytesReceived === 'number') bytesRecv += s.bytesReceived;
+            if (s.timestamp) ts = Math.max(ts, s.timestamp);
+          }
+        });
+        if (prevTs && ts && (bytesSent || bytesRecv)) {
+          const dtSec = (ts - prevTs) / 1000;
+          const upKbps = Math.max(0, ((bytesSent - prevBytesSent) * 8) / 1000 / dtSec);
+          const downKbps = Math.max(0, ((bytesRecv - prevBytesRecv) * 8) / 1000 / dtSec);
+          setStats(s => ({ ...s, upKbps: Math.round(upKbps), downKbps: Math.round(downKbps) }));
+        }
+        prevTs = ts || prevTs;
+        prevBytesSent = bytesSent || prevBytesSent;
+        prevBytesRecv = bytesRecv || prevBytesRecv;
+      } catch {}
+      if (!cancelled) setTimeout(poll, 2000);
+    };
+    poll();
+    return () => { cancelled = true; };
+  }, [isStarted]);
 
   async function startRenderLoop() {
     const video = videoRef.current!;
@@ -150,6 +214,11 @@ export const App: React.FC = () => {
         
         if (mode === 'wasm') {
           dets = await wasm.inferFromCanvas(canvas);
+          // If we have meta from sender, compute E2E latency using capture_ts
+          if (state.lastMeta) {
+            const e2e = nowMs() - state.lastMeta.capture_ts;
+            setStats((s)=>({ ...s, e2e }));
+          }
         } else {
           // Original static HTTP infer path
           const meta = state.lastMeta || { frame_id: 0, capture_ts: nowMs() };
@@ -214,6 +283,10 @@ export const App: React.FC = () => {
     setStats({ fps: 0, e2e: 0, detections: 0, confidence: 0, uptime: 0 });
     setDetectionStats({ total: 0, byLabel: {}, averageConfidence: 0 });
     setRecentDetections([]);
+    try { dataRef.current?.close?.(); } catch {}
+    try { pcRef.current?.close?.(); } catch {}
+    try { wsRef.current?.close?.(); } catch {}
+    pcRef.current = null; wsRef.current = null; dataRef.current = undefined;
   };
 
   const getStatusColor = () => {
@@ -410,6 +483,14 @@ export const App: React.FC = () => {
                       <div className="text-center">
                         <div className="text-xl font-bold text-orange-600">{stats.uptime}s</div>
                         <div className="text-xs text-gray-600">Uptime</div>
+                      </div>
+                      <div className="text-center col-span-1">
+                        <div className="text-sm font-bold text-gray-800">{stats.upKbps} kbps</div>
+                        <div className="text-xs text-gray-600">Uplink</div>
+                      </div>
+                      <div className="text-center col-span-1">
+                        <div className="text-sm font-bold text-gray-800">{stats.downKbps} kbps</div>
+                        <div className="text-xs text-gray-600">Downlink</div>
                       </div>
                     </div>
                   </div>
