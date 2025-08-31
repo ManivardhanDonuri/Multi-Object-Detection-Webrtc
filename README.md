@@ -3,8 +3,8 @@
 One-command demo streaming from phone browser → desktop with real-time detection overlay.
 
 ### Live Demo
-- Live demo: https://multi-object-detection-webrtc-production.up.railway.app/
-- Deployed on Railway (https://railway.app/)
+- Live demo: https://webrtc-vlm.netlify.app/
+- Deployed on Netlify 
 
 ### Run
 - One command: `./start.sh wasm` (or `./start.sh server`)
